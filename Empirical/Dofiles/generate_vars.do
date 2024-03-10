@@ -13,7 +13,38 @@ restore
 
 _d: dummies for them. ==1 if nonzero.
 */
-use "data_tmp2", clear
+
+*use "data_tmp2", clear
+
+
+sort hh_faim_id round faim_id
+foreach var in b_age b_education b_hyperbolic b_write_swahili b_rosca {
+	gen `var'_spouse=`var'[_n+1] if female==0  & hh_faim_id==hh_faim_id[_n+1] & round==round[_n+1]
+	replace `var'_spouse=`var'[_n-1] if female==1  & hh_faim_id==hh_faim_id[_n-1] & round==round[_n-1]
+	
+	gen `var'_male=`var' if female==0
+	replace `var'_male=`var'_spouse if female==1
+	gen `var'_female=`var' if female==1
+	replace `var'_female=`var'_spouse if female==0
+}
+
+*fix entry error;
+replace b_age_female=. if b_age_female==105 | b_age_female<16
+
+foreach var in b_has_mobile_phone b_account_mobile_money {
+	egen `var'_hh=total(`var'), by(hh_faim round) missing
+	replace `var'_hh=1 if `var'_hh==2
+}
+
+/* Here they use exchange rate as 80 Ksh/USD */
+gen usd_income_sale_animal_hh_w1=ksh_income_sale_animal_hh/80
+gen usd_income_sum_hh=ksh_income_sum_hh/80
+gen b_animal_durable_usd=b_animal_durable/80
+sum b_animal_durable_usd if round==1, d
+gen b_animal_durable_usd_w1=b_animal_durable_usd
+replace b_animal_durable_usd_w1=r(p99) if b_animal_durable_usd>r(p99) & b_animal_durable_usd!=.
+
+
 replace exp_bank_dep_hh_d=0 	if hasbank_hh==0 & exp_bank_dep_hh_d==.
 replace exp_bank_dep_hh_w1=0 	if hasbank_hh==0 & exp_bank_dep_hh_w1==.
 
@@ -74,7 +105,6 @@ foreach var in ///
 }
 
  
-
 
 
 /* Generate extensive margin response */
@@ -383,7 +413,7 @@ ganga ganga_m sioport sioport_m
 keep hh_faim_id faim_id round female  `keep_vars' `keep_vars_hh'
 
 /* keep sampled households only */
-merge m:1 hh_faim_id using Data_Z
+merge m:1 hh_faim_id using data_ZD
 drop if _merge != 3
 drop _merge
 drop id1 id2 Z1 Z2
@@ -395,5 +425,5 @@ replace female = 2-female
 reshape wide faim_id `keep_vars', i(hh_faim_id round) j(female)
 
 order hh_faim_id round faim_id1 faim_id2 
-ren faim_id1 id1 
+ren faim_id1 id1
 ren faim_id2 id2
