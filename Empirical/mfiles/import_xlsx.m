@@ -1,7 +1,7 @@
 %% Import Data
 clear all;clc;close all
 
-baseroot = 'C:\rsw\Replication Datasets\Kenya Savings\xlsx\';
+baseroot = 'C:\rsw\Replication Datasets\Codes_for_3YP\Empirical\xlsx\';
 
 ZD_xlsx = importdata([baseroot,'data_ZD.xlsx']);
 Y1_xlsx = importdata([baseroot,'data_Y1.xlsx']);

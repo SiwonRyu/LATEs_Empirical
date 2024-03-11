@@ -49,7 +49,7 @@ Pwh = @(z,Z) (-idx(z,Z)./(q_zh(z).^2)).*q_bzh(z);
 
 % Set Monotone Pair (z, z') = (za_1, zb_1)
 % 1: (0,0) / 2: (1,0) / 3: (0,1) / 4: (0,0)
-z_a1 = 2;
+z_a1 = 3;
 z_b1 = 4;
 
 % Omega, and its derivative (w.r.t. gamma, (G x 14))
@@ -71,7 +71,8 @@ P_Kh_lin = P_Kh_lin_all(:,:,:,2);
 P_Kh_nl  = P_Kh_nl_all(:,:,:,2);
 
 
-%% for cross monotonicity
+
+% for cross monotonicity
 % 1st Stage IV
 IV_tmp = [T(:,:,1), T(:,:,2), Tg];
 
@@ -81,10 +82,35 @@ IV_tmp = [T(:,:,1), T(:,:,2), Tg];
 [b2r,e2,Yhat2r, IF_1st_2r, SE_1st_2r, T_1st_2r, P_1st_2r, ~, X_hat2r] ...
     = IVe(omegah.*Y_obs(:,:,2), omegah.*[D_obs(:,:,2),D_obs(:,:,1)], IV_tmp);
 
-[b1r, SE_1st_1r, T_1st_1r, P_1st_1r];
-[b2r, SE_1st_2r, T_1st_2r, P_1st_2r];
 
 
+
+IV_tmp = [P_Kh_nl(:,:,1), P_Kh_nl(:,:,2)];
+[b1r_n,e1_n,~, ~, SE_1st_1r_n, T_1st_1r_n, P_1st_1r_n, ~, ~] ...
+    = IVe(omegah.*Y_obs(:,:,1), omegah.*[D_obs(:,:,1),D_obs(:,:,2)], IV_tmp);
+[b2r_n,e2_n,~, ~, SE_1st_2r_n, T_1st_2r_n, P_1st_2r_n, ~, ~] ...
+    = IVe(omegah.*Y_obs(:,:,2), omegah.*[D_obs(:,:,2),D_obs(:,:,1)], IV_tmp);
+
+
+IV_tmp = [P_Kh_lin(:,:,1), P_Kh_lin(:,:,2)];
+[b1r_l,e1_l,~, ~, SE_1st_1r_l, T_1st_1r_l, P_1st_1r_l, ~, ~] ...
+    = IVe(omegah.*Y_obs(:,:,1), omegah.*[D_obs(:,:,1),D_obs(:,:,2)], IV_tmp);
+[b2r_l,e2_l,~, ~, SE_1st_2r_l, T_1st_2r_l, P_1st_2r_l, ~, ~] ...
+    = IVe(omegah.*Y_obs(:,:,2), omegah.*[D_obs(:,:,2),D_obs(:,:,1)], IV_tmp);
+
+
+[b1r, SE_1st_1r, T_1st_1r, P_1st_1r]
+[b2r, SE_1st_2r, T_1st_2r, P_1st_2r]
+
+[b1r_n, SE_1st_1r_n, T_1st_1r_n, P_1st_1r_n]
+[b2r_n, SE_1st_2r_n, T_1st_2r_n, P_1st_2r_n]
+
+[b1r_l, SE_1st_1r_l, T_1st_1r_l, P_1st_1r_l]
+[b2r_l, SE_1st_2r_l, T_1st_2r_l, P_1st_2r_l]
+
+
+
+%%
 % Homogeneous Error Variance
 A1r = X_hat1r'*X_hat1r/G; % separate variance
 A2r = X_hat2r'*X_hat2r/G;
@@ -191,3 +217,131 @@ res       = cat(3, res_eo_n_s, res_eo_l_s, res_1st )
 res_sel   = res_eo_l_s(:,2:5);
 %res_sel(6,:) = [];
 %res_sel(3,:) = []
+
+%%
+clc
+size(e1_l)
+e_l = [e1_l, e2_l];
+
+Si = inv(S_homo_j)
+DD = mat_D;
+PP1 = mat_P(:,:,:,1);
+PP2 = mat_P(:,:,:,2);
+YY = mat_Y;
+
+size(permute(PP1,[4,1,2,3]))
+size(permute(DD,[2,1,4,3]))
+
+ST1 = 0;
+RT1 = 0;
+for g = 1:G
+    ST1 = ST1 + omegah(g).*PP1(:,:,g)'*DD(:,:,g);
+    RT1 = RT1 + sum(omegah(g).*PP1(:,:,g)'*YY(:,g),2);
+end
+
+omegahr = permute(omegah,[2,3,1]);
+
+ST0 = squeeze(mean(sum(permute(omegahr.*PP1,[2,1,4,3]).*permute(DD,[4,1,2,3]),2),4))
+ST1/G
+ST2 = mean(AtimesB_C(omegahr.*PP1, DD),3)
+
+RT0 = squeeze(mean(  sum(omegahr.*PP1.*permute(YY,[1,3,2]),1)    ,3)  )'
+RT1/G
+RT2 = mean(  AtimesB_C(omegahr.*PP1, permute(YY,[1,3,2])),3  )
+
+[ST0\RT0, [b1r_n; b2r_n], beta_2ndh(:,:,1)]
+
+
+
+
+
+%P_Kh_lin
+
+PPP1 = [P_Kh_nl(:,:,1), P_Kh_nl(:,:,2)];
+PPP2 = [P_Kh_nl(:,:,2), P_Kh_nl(:,:,1)];
+
+PPP3 = [P_Kh_lin(:,:,1), P_Kh_lin(:,:,2)];
+PPP4 = [P_Kh_lin(:,:,2), P_Kh_lin(:,:,1)];
+
+DDD1 = [D_obs(:,:,1), D_obs(:,:,2)];
+DDD2 = [D_obs(:,:,2), D_obs(:,:,1)];
+YYY = [Y_obs(:,:,1), Y_obs(:,:,2)];
+
+
+PPPn = [PPP1, PPP2];
+PPPl = [PPP3, PPP4];
+DDD = [DDD1, DDD2];
+
+Dentmpn = PPPn'*(omegah.*DDD)/G;
+Numtmpn = PPPn'*(omegah.*YYY)/G;
+
+Dentmpl = PPPl'*(omegah.*DDD)/G;
+Numtmpl = PPPl'*(omegah.*YYY)/G;
+
+for i = 1:2
+    for j = 1:2
+    Dentmpn(2*i-1:2*i, 2*j-1:2*j) = Si(i,j)*Dentmpn(2*i-1:2*i, 2*j-1:2*j);
+    Numtmpn(2*i-1:2*i, j) = Si(i,j)*Numtmpn(2*i-1:2*i, j);
+
+    Dentmpl(2*i-1:2*i, 2*j-1:2*j) = Si(i,j)*Dentmpl(2*i-1:2*i, 2*j-1:2*j);
+    Numtmpl(2*i-1:2*i, j) = Si(i,j)*Numtmpl(2*i-1:2*i, j);
+    end
+end
+Dentmpn
+mean(mat_Denh(:,:,:,1),3)
+
+Numtmpn = sum(Numtmpn,2)
+mean(mat_Numh(:,:,:,1),3)
+
+Dentmpl
+mean(mat_Denh(:,:,:,2),3)
+
+Numtmpl = sum(Numtmpl,2)
+mean(mat_Numh(:,:,:,2),3)
+
+Dentmpn\Numtmpn
+Dentmpl\Numtmpl
+
+
+%%
+
+
+size(PPPn)
+size(DDD)
+
+
+GT1 = 0;
+for g = 1:G
+    GT1 = GT1 + omegah(g)*PPPn(:,:,g)'*DDD(:,:,g);
+end
+GT2 = mean(AtimesB_C(omegahr.*PPPn, DDD),3);
+GT1/G;
+
+
+aa = Si.*GT1/G
+bb = Si.*GT2
+cc = mean(mat_Denh,3)
+%%
+ST0
+ST0_r = ST0;
+
+
+
+ST0_r
+mean(mat_Denh,3)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

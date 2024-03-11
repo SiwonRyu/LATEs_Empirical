@@ -1,12 +1,3 @@
-set more off
-clear all
-macro drop _all
-
-set mem 	300m
-set maxvar 	30000
-
-global baseroot "C:\rsw\Replication Datasets\Codes_for_3YP\Empirical"
-cd "$baseroot"
 
 use data_analysis, clear
 
