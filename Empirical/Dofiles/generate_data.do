@@ -189,8 +189,8 @@ replace open2 = 1 if open_joint == 1
 *ed hh_faim_id id1 id2 Z1 Z2 open1 open2 open_joint1 open_joint2 open_joint if hh_faim_id == 4276
 
 save data_ZD, replace
-erase data_Z.dta
-erase data_D_tmp.dta
+*erase data_Z.dta
+*erase data_D_tmp.dta
 restore
 
 

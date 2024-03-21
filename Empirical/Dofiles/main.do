@@ -121,6 +121,8 @@ forv i = 1/2{
 	local T_`i' ///
 	sqs`i' hh_size`i' 
 	
+	
+	
 	local nW_`i' : word count `W_`i''
 	local nT_`i' : word count `T_`i''
 	
@@ -143,6 +145,9 @@ local nT_g : word count `T_g'
 
 for any `W_g' \ num 1/`nW_g' : cap drop W_gY \ gen W_gY = X
 for any `T_g' \ num 1/`nT_g' : cap drop T_gY \ gen T_gY = X
+
+local N_gam =  `nW_g'+ `nT_g'+ 2*`nW_1'+ 2*`nW_2'+ `nT_1'+ `nT_2'
+
 
 
 /*******************************************************************************
@@ -236,7 +241,12 @@ save data_analysis, replace
 *******************************************************************************/
 do "Dofiles\def_est_iv.do"
 
+
 use data_analysis, clear
+drop if Y1 == .
+drop if Y2 == .
+replace Y1 = log(Y1+1)
+replace Y2 = log(Y2+1)
 est_iv Y1 ,za(2) zb(4) fs 
 est_iv Y1 ,za(3) zb(4) fs 
 

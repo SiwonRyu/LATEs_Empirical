@@ -32,10 +32,11 @@ real matrix q_fun(z,Q){
 
 /* dq_z(X'gamma)/dgamma as a function of z */
 real matrix dq_fun(z,Q){
+	n_gam = (cols(Q)-2)/2
 	q1 = Q[,1]
 	q2 = Q[,2]
-	dq1 = Q[,3..28]
-	dq2 = Q[,29..54]
+	dq1 = Q[,3..2+n_gam]
+	dq2 = Q[,3+n_gam..2+2*n_gam]
 	
 	dq = 	(z==1):*(  dq1:*	q2  ,  	  q1 :* dq2 ) ///
 		:+ 	(z==2):*(  dq1:*(1:-q2) ,  	  q1 :*-dq2 ) ///
@@ -59,8 +60,9 @@ real matrix dw_fun(za,zb,Z,Q){
 /* Influence Function for gamma */
 real matrix IF_gam_fun(Z,Q){
 	G = rows(Z)
-	dq1 = Q[,3..28]
-	dq2 = Q[,29..54]
+	n_gam = (cols(Q)-2)/2
+	dq1 = Q[,3..2+n_gam]
+	dq2 = Q[,3+n_gam..2+2*n_gam]
 	
 	r1 = Z[,1]-Q[,1]
 	r2 = Z[,2]-Q[,2]	
@@ -118,7 +120,7 @@ real matrix var_2nd(G,YD,w,P,Si,b,IF_gam,dw,fs){
 	
 	Rwe = J(G,4,0)
 	Re	= J(G,4,0)
-	B 	= J(4,52,0)
+	B 	= J(4,cols(IF_gam),0)
 
 	for(g=1; g<=G; g++){
 		PP = (P[g,1], P[g,2], 0 , 0 \ 0, 0, P[g,2], P[g,1])
@@ -171,6 +173,7 @@ qui{
 		gam1 	 = st_matrix("gam1")
 		gam2 	 = st_matrix("gam2")	
 		gam  	 = gam1', gam2'
+		ngam 	 = length(gam)
 		
 		Q 		 = q_obs_fun(gam, X_z)
 		w 		 =  w_fun(`za',`zb',Z,Q)

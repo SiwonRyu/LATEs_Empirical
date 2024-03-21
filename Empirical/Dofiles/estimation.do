@@ -113,7 +113,7 @@ gen omega_01_00 = omega_01 - omega_00
 
 for any omega Y_tilde1 Y_tilde2 D_tilde1 D_tilde2 D_tilde_both ///
 P_Kh_lin1 P_Kh_lin2 P_Kh_lin12: cap drop X
-gen omega 	 	 = omega_10_00
+gen omega 	 	 = omega_01_00
 gen Y_tilde1 	 = Y1*omega
 gen Y_tilde2 	 = Y2*omega
 gen D_tilde1 	 = D1*omega
