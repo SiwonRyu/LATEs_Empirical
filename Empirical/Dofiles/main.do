@@ -20,9 +20,20 @@ do "Dofiles\generate_data.do"
 	Data pre-processing: Set outcome variable (Y)
 *******************************************************************************/
 use data, clear
-global depvar exp_bank_dep_d
+su exp_bank_dep_d1 exp_bank_dep_w1_usd1 bankwithd_d1 bankwithd_w1_usd1 amtgavesp_d1 amtgavesp_w1_usd1
+su exp_bank_dep_d2 exp_bank_dep_w1_usd2 bankwithd_d2 bankwithd_w1_usd2 amtgavesp_d2 amtgavesp_w1_usd2
+
+cap drop nmis
+egen nmis=rmiss(exp_bank_dep_d* exp_bank_dep_w1_usd* bankwithd_d* bankwithd_w1_usd* amtgavesp_d* amtgavesp_w1_usd*)
+tab nmis
+keep if nmis == 0
+drop nmis
+
+
+
+*global depvar exp_bank_dep_d
 *global depvar exp_bank_dep_w1_usd
-*global depvar bankwithd_d
+global depvar bankwithd_d
 *global depvar bankwithd_w1_usd
 *global depvar amtgavesp_usd
 *global depvar amtgavesp_d
@@ -35,26 +46,16 @@ forv i = 1/2{
 	cap drop Y`i'
 	cap drop x`i'
 	cap drop Y`i'_pre
-	cap drop Y`i'_pre_m
-
 	gen  Y`i' = ${depvar}`i'
 	gen  x`i' = ${depvar}`i' if round==1
-	egen Y`i'_pre=max(x`i'), by(id`i')
-	gen  Y`i'_pre_m=1 if Y`i'_pre ==.
-	replace Y`i'_pre_m=0 if Y`i'_pre !=.
-	replace Y`i'_pre=0 if Y`i'_pre ==.	
+	egen Y`i'_pre=max(x`i'), by(id`i')	
 }
 
+reg Y1 Y1_pre b_age* b_educ* hh_size* h_index log_ani Y1_pre Y2_pre
 // Drop all missings
-keep if b_age_m1 == 0 & b_age_m2 == 0 ///
-& b_education_m1 == 0 & b_education_m2 == 0 ///
-& h_index_m == 0 & log_ani_m == 0 ///
-& b_rosca_m1 == 0 & b_rosca_m2 == 0 ///
-& hh_size_m1 == 0 & hh_size_m2 == 0 ///
-& Y1_pre_m == 0 & Y2_pre_m == 0
-}
+keep if e(sample)
 tabstat hh_faim_id, statistics( count ) by(round) 
-
+}
 
 
 /*******************************************************************************
@@ -62,20 +63,8 @@ tabstat hh_faim_id, statistics( count ) by(round)
 *******************************************************************************/
 qui{
 // Takeup: open
-local take_up open
-gen D1 = `take_up'1
-gen D2 = `take_up'2
-replace D1 = 0 if D1 == .
-replace D2 = 0 if D2 == .
-
-// Takeup: hasbank
-// local take_up hasbank
-// gen D1 = `take_up'1
-// gen D2 = `take_up'2
-// replace D1 = 1 if open1 == 1
-// replace D2 = 1 if open2 == 1
-// replace D1 = 0 if D1 == .
-// replace D2 = 0 if D2 == .
+*for num 1/2: gen DX = openX
+for num 1/2: gen DX = hasbankX
 
 gen  D_both = D1*D2
 gen  D_male = (1-D1)*D2
@@ -94,7 +83,6 @@ su D_one D_female D_male D_both if hh_faim_id != 4357 & Z_female == 1
 su D_one D_female D_male D_both if hh_faim_id != 4357 & Z_male == 1
 su D_one D_female D_male D_both if hh_faim_id != 4357 & Z_both == 1
 
-
 // Treatment Categorical Variables
 gen Z_cat = Z1*Z2 + 2*Z1*(1-Z2) + 3*(1-Z1)*Z2 + 4*(1-Z1)*(1-Z2)
 gen D_cat = D1*D2 + 2*D1*(1-D2) + 3*(1-D1)*D2 + 4*(1-D1)*(1-D2)
@@ -109,6 +97,7 @@ label values D_cat TK_CAT
 tab Z_cat D_cat
 
 
+
 /*******************************************************************************
 	Data pre-processing: Set Covariates
 *******************************************************************************/
@@ -116,10 +105,10 @@ tab Z_cat D_cat
 forv i = 1/2{
 	local W_`i' ///
 	b_account_mobile_money`i' b_age`i'  b_education`i' ///
-	b_rosca`i' ksh_income_sum_w1_usd`i'
+	 ksh_income_sum_w1_usd`i' b_rosca`i'  hh_size`i'  
 		
 	local T_`i' ///
-	sqs`i' hh_size`i' 
+	sqs`i'
 	
 	
 	
@@ -150,23 +139,56 @@ local N_gam =  `nW_g'+ `nT_g'+ 2*`nW_1'+ 2*`nW_2'+ `nT_1'+ `nT_2'
 
 
 
+local Ylist exp_bank_dep_d exp_bank_dep_w1_usd bankwithd_d bankwithd_w1_usd amtgavesp_d amtgavesp_w1_usd
+
+reg D1 T* W* 
+est store regD1
+reg D2 T* W* 
+est store regD2
+reg D_both T* W* 
+est store regDb
+
+local j = 0
+foreach Y in `Ylist'{
+	forv i = 1/2{
+		cap drop x`i'
+		cap drop `Y'`i'_pre
+		gen  x`i' = `Y'`i' if round==1
+		egen `Y'`i'_pre=max(x`i'), by(id`i') 
+		drop x`i'
+	}
+
+
+	local j = `j'+1
+	reg `Y'1 T* W* `Y'1_pre 
+	est store regY1_`j'
+
+	reg `Y'2 T* W* `Y'2_pre 
+	est store regY2_`j'
+}
+est table regD1 regD2 regDb regY1_1 regY2_1 regY1_2 regY2_2, b(%5.3f) star stat(N)
+est table regD1 regD2 regDb regY1_3 regY2_3 regY1_4 regY2_4, b(%5.3f) star stat(N)
+est table regD1 regD2 regDb regY1_5 regY2_5 regY1_6 regY2_6, b(%5.3f) star stat(N)
+
+
 /*******************************************************************************
 	Data Export in Excel xlsx format
 *******************************************************************************/
-keep if round >= 3
+keep if round >= 3 & round <=6
+gen post = round >= 3 & round <=6
+
+cap drop nmis
+egen nmis=rmiss(Y* T* W*)
+tab nmis
+keep if nmis == 0
+drop nmis
 do "Dofiles\export_to_excel.do"
-
-
-egen nmis=rmiss(*)
-
-
 
 
 
 /*******************************************************************************
 	Data pre-processing: Description of Outcome
 *******************************************************************************/
-gen post = round >= 2
 
 // preserve
 // collapse Y1 Y2, by(Z_cat post)
@@ -219,19 +241,12 @@ the treatment take-up but not affect outcomes.
 *******************************************************************************/
 
 *keep if round >= 2
-reg D1 T* W*,r
-est store regD1
-reg D2 T* W*,r
-est store regD2
-reg D_both T* W*,r
-est store regDb
 
-reg Y1 T* W* Y1_pre,r
-est store regY1
-reg Y2 T* W* Y2_pre,r
-est store regY2
 
-est table regD1 regD2 regDb regY1 regY2, b(%5.3f) star stat(N)
+
+
+
+
 save data_analysis, replace
 
 
@@ -243,10 +258,19 @@ do "Dofiles\def_est_iv.do"
 
 
 use data_analysis, clear
+xtset hh_faim round
 drop if Y1 == .
 drop if Y2 == .
-replace Y1 = log(Y1+1)
-replace Y2 = log(Y2+1)
+// gen dy1 = d.Y1
+// gen dy2 = d.Y2
+// drop Y1 Y2
+// drop if dy1 == .
+// drop if dy2 == .
+// ren dy1 Y1
+// ren dy2 Y2
+
+*replace Y1 = log(Y1+1)
+*replace Y2 = log(Y2+1)
 est_iv Y1 ,za(2) zb(4) fs 
 est_iv Y1 ,za(3) zb(4) fs 
 
@@ -254,3 +278,94 @@ est_iv Y1 ,za(3) zb(4) fs
 
 
 
+
+/*******************************************************************************
+	Vazquez (2022) IV regression 
+for unit i, 
+coef of Di is direct when i is complier
+coef of Dj is the indirect when j is complier
+*******************************************************************************/
+qui{
+ivregress 2sls Y1 (i.D1##i.D2 = i.Z1##i.Z2) T_* W_*,r 
+est store VZ1
+local VZ1_dir_coef = _b[1.D1]
+local VZ1_dir_se = _se[1.D1]
+local VZ1_ind_coef = _b[1.D2]
+local VZ1_ind_se = _se[1.D2]
+
+ivregress 2sls Y2 (i.D1##i.D2 = i.Z1##i.Z2)  T_* W_*,r 
+est store VZ2
+local VZ2_dir_coef = _b[1.D2]
+local VZ2_dir_se = _se[1.D2]
+local VZ2_ind_coef = _b[1.D1]
+local VZ2_ind_se = _se[1.D1]
+
+mat b_VZ = J(1,4,0)
+mat V_VZ = J(4,4,0)
+mat b_VZ[1,1] = `VZ1_dir_coef'
+mat b_VZ[1,2] = `VZ2_ind_coef'
+mat b_VZ[1,3] = `VZ1_ind_coef'
+mat b_VZ[1,4] = `VZ2_dir_coef' 
+mat V_VZ[1,1] = `VZ1_dir_se'^2
+mat V_VZ[2,2] = `VZ2_ind_se'^2
+mat V_VZ[3,3] = `VZ1_ind_se'^2
+mat V_VZ[4,4] = `VZ2_dir_se'^2
+matlist b_VZ
+matlist V_VZ
+
+local xlist Direct_female Indirect_male Indirect_female Direct_male
+matrix colnames b_VZ = `xlist'
+matrix colnames V_VZ = `xlist'
+matrix rownames V_VZ = `xlist'
+
+ereturn post b_VZ V_VZ
+noi ereturn display
+}
+	
+
+/*******************************************************************************
+	Imbens Angrist (1994) LATE regression
+*******************************************************************************/
+qui{
+ivregress 2sls Y1 (i.D1 = i.Z1) T_* W_*,r 
+est store LATE1
+local LATE1_coef = _b[1.D1]
+local LATE1_se = _se[1.D1]
+
+ivregress 2sls Y2 (i.D2 = i.Z2 ) T_* W_*,r 
+est store LATE2
+local LATE2_coef = _b[1.D2]
+local LATE2_se = _se[1.D2]
+
+mat b_LATE = [`LATE1_coef' , `LATE2_coef']
+mat V_LATE = [`LATE1_se'^2 , 0 \ 0 , `LATE2_se'^2]
+matlist b_LATE
+matlist V_LATE
+
+local xlist Direct_female Direct_male
+matrix colnames b_LATE = `xlist'
+matrix colnames V_LATE = `xlist'
+matrix rownames V_LATE = `xlist'
+
+ereturn post b_LATE V_LATE
+noi ereturn display
+}
+
+
+
+
+/*******************************************************************************
+	Estimate ITT effects, compare to Table 5-7
+*******************************************************************************/
+qui{
+xtset round hh_faim_id
+qui xtreg Y1 Z1 Y1_pre T_* W_*
+est store ITT_ind1
+qui xtreg Y1 Z1 Z2 Z_both Y1_pre T_* W_*
+est store ITT_inf1
+qui xtreg Y2 Z2 Y2_pre T_* W_*
+est store ITT_ind2
+qui xtreg Y2 Z1 Z2 Z_both Y2_pre T_* W_*
+est store ITT_inf2
+}
+est table ITT_ind1 ITT_inf1 ITT_ind2 ITT_inf2, keep(Z1 Z2 Z_both) star b(%5.3f)

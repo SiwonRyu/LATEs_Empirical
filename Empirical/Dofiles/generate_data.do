@@ -1,33 +1,17 @@
-
-
 /*******************************************************************************
 	From the original replication pacakge for sample 
 *******************************************************************************/
-* for couples: only keep obs if both spouses surveyed in a given round
+* Keep if both spouses surveyed in a given round
 egen missing = total(resp_not_interviewed), by(hh_faim round)
 keep if missing == 0
 drop missing
 
-* controls for SQS status and baseline mobile money access
-gen 	b_account_mobile_money_m = 	b_account_mobile_money==.
-replace b_account_mobile_money=0 if b_account_mobile_money==.
-
-* Keep only those households that appear in regressions
-foreach minround in 1 3{
-	reg hasbank_hh ///
-		sqs_any b_account_mobile_money b_account_mobile_money_m ///
-		dual_acct_male_only dual_acct_female_only dual_acct_both ///
-		account_any_unmarried b_female_unmarried ///
-		i.round i.sioport i.ganga ///
-		i.survey_month#i.survey_year i.fo_id ///
-		if round>=`minround' & round<=6 & female==1, clust(faim)
-		est store reg_`minround'
-}
-est restore reg_3
-egen in_analysis_sample=max(e(sample)), by(hh_faim)
-est restore reg_1
-egen in_attrition_sample=max(e(sample)), by(hh_faim)
-drop _est*
+* Conditions for analysis/attrition samples
+gen sample3 = hasbank_hh !=. & survey_month !=. & round>=3 & round<=6 & female==1
+gen sample1 = hasbank_hh !=. & survey_month !=. & round>=1 & round<=6 & female==1
+egen in_analysis_sample = max(sample3), by(hh_faim)
+egen in_attrition_sample = max(sample1), by(hh_faim)
+drop sample*
 
 
 /*******************************************************************************
@@ -68,6 +52,7 @@ preserve
 	gen id1 = hh_faim_id*10+2
 	gen id2 = hh_faim_id*10+1 
 	order hh_faim id1 id2 Z1 Z2
+	
 	save data_Z.dta,replace
 restore
 
@@ -78,14 +63,15 @@ restore
 *do "Dofiles\generate_D.do"
 
 * Variables computed from table 3
-egen tot_num_transactions=rowtotal(total_dep_num total_wd_num),m
+egen tot_num_transactions=rowtotal(total_dep_num total_wd_num), missing
 replace tot_num_transactions=0 if tot_num_transactions==. & account==1
 gen account_active5t=(tot_num_transactions>=5) if tot_num_transactions!=.
 gen account_active2t=(tot_num_transactions>=2) if tot_num_transactions!=.	
 ren ever_used_account ever_used
 
+
 // Note: the [missing] option of egen total return missing when all are missing
-local vars open ever_used account_active5t account_active2t
+local vars open opened_joint ever_used account_active5t account_active2t
 foreach var in `vars'{
 	egen `var'_hh = total(`var'), by(hh_faim round) missing
 	replace `var'_hh = 1 if `var'_hh == 2
@@ -109,34 +95,42 @@ gen round1_plus = 0
 replace round1_plus = round == 1
 replace round1_plus = 1 if round == 3 & hh_faim_id == 4357
 
-
 * Part of Table 3 to verify
 noi di ""
-noi di "Part of Table 3"
-noi su open_hh ever_used_hh account_active5t_hh account_active2t_hh ///
+noi di "Part of Table 3: took-up/ever used/2tr/5tr"
+noi su open_hh ever_used_hh account_active2t_hh account_active5t_hh  ///
+	if female==1 & round==1 & in_analysis_sample==1
+
+noi di ""
+noi di "Part of Table 3: for dual-headed sample"
+noi su open_hh ever_used_hh opened_joint account_active5t_hh account_active2t_hh ///
 	if b_female_unmarried==0 & female==1 & round==1 & in_analysis_sample==1
-noi su open_hh ever_used_hh account_active5t_hh account_active2t_hh ///
+noi su open_hh ever_used_hh opened_joint account_active5t_hh account_active2t_hh  ///
 	if b_female_unmarried==0 & female==1 & round1_plus==1 & in_analysis_sample==1
 
-// bys round: tab open opened_joint if b_female_unmarried==0 & female==1 & account == 1
-// sort hh_faim faim_id round female b_female_unmarried account open opened_joint
-// ed hh_faim faim_id round female b_female_unmarried account spouse_account open opened_joint if hh_faim_id == 4276
+gen zeros = 0
+egen open_rev = rowmax(open opened_joint_hh zeros)
 
+
+gen hasbank3_tmp = hasbank if round == 3
+egen hasbank3 = max(hasbank3_tmp), by(faim_id)
+su hasbank3 open_rev
+bys round: tab hasbank3 open
 
 * Split, Reshape, Merge
 preserve
 	collapse ///
 	(mean) /// 
-		m_hasbank = hasbank ///
-		m_open=open ///
-		m_open_joint = opened_joint ///
+		m_hasbank = hasbank3 ///
+		m_open=open_rev ///
+		m_open_joint = opened_joint_hh ///
 		m_ever_used = ever_used ///
 		m_account_active5t = account_active5t ///
 		m_account_active2t = account_active2t ///
 	(sd) ///
-		sd_hasbank = hasbank ///
-		sd_open = open ///
-		sd_open_joint = opened_joint ///
+		sd_hasbank = hasbank3 ///
+		sd_open = open_rev ///
+		sd_open_joint = opened_joint_hh ///
 		sd_ever_used = ever_used ///
 		sd_account_active5t = account_active5t ///
 		sd_account_active2t = account_active2t ///
@@ -150,10 +144,12 @@ preserve
 	save data_D_tmp, replace
 restore
 
+
 preserve
 use data_Z,clear // indices generated from [generat_Z.do]
 
-local varlist open open_joint ever_used account_active5t account_active2t
+local varlist hasbank open open_joint ever_used account_active5t account_active2t
+
 forv i = 1/2{
 ren id`i' faim_id
 merge 1:1 faim_id using data_D_tmp
@@ -164,6 +160,7 @@ merge 1:1 faim_id using data_D_tmp
 	}
 ren faim_id id`i'
 }
+
 foreach var in `varlist'{
 	egen `var'_hh = rowtotal(`var'1 `var'2) 
 	replace `var'_hh = 1 if `var'_hh == 2 
@@ -182,16 +179,13 @@ noi su open_hh open_hh2 ever_used_hh ever_used_hh2 ///
 account_active5t_hh account_active5t_hh2 ///
 account_active2t_hh account_active2t_hh2
 
-egen open_joint = rmax(open_joint1 open_joint2)
-replace open1 = 1 if open_joint == 1
-replace open2 = 1 if open_joint == 1
-
 *ed hh_faim_id id1 id2 Z1 Z2 open1 open2 open_joint1 open_joint2 open_joint if hh_faim_id == 4276
 
 save data_ZD, replace
-*erase data_Z.dta
-*erase data_D_tmp.dta
+erase data_Z.dta
+erase data_D_tmp.dta
 restore
+
 
 
 /*******************************************************************************
