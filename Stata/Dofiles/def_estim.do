@@ -249,8 +249,22 @@ qui{
 	ereturn post b V
 	noi ereturn display
 	noi di "Number of observations used = " G[1,1]
+	su P1
+	local N1 = r(N)
+	local P_com1 = r(mean)
+	local P_nt1 = 1-`P_com1'
+	su P2
+	local N2 = r(N)
+	local P_com2 = r(mean)
+	local P_nt2 = 1-`P_com2'
+	mat Dist_types = [`P_com1', `P_nt1'\ `P_com2', `P_nt2']
+	mat colnames Dist_types = Complier Never_taker
+	mat rownames Dist_types = Female Male
+	noi matlist Dist_types, format(%15.2f) border(rows)
+	noi di "Mean of estimated P_K from " `N1' "/" `N2' " observations"
 	
-	drop var_* *tilde* *1st P* iota
+	
+	drop var_* *tilde* *1st iota
 } //qui end	
 end
 
