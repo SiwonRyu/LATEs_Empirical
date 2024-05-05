@@ -51,15 +51,15 @@ preserve
 restore
 
 preserve
-	keep hh_faim round id1 id2 Y1 Y1_pre 
-	order hh_faim round id1 id2 Y1 Y1_pre 
+	keep hh_faim round id1 id2 Y1 Y1_b
+	order hh_faim round id1 id2 Y1 Y1_b
 	sort hh_faim round id1 id2
 	export excel using "xlsx/data_Y1", firstrow(variables) replace
 restore
 
 preserve
-	keep hh_faim round id1 id2 Y2 Y2_pre 
-	order hh_faim round id1 id2 Y2 Y2_pre 
+	keep hh_faim round id1 id2 Y2 Y2_b
+	order hh_faim round id1 id2 Y2 Y2_b
 	sort hh_faim round id1 id2
 	export excel using "xlsx/data_Y2", firstrow(variables) replace
 restore

@@ -121,15 +121,18 @@ real matrix var_2nd(G,YD,w,P,Si,b,IF_gam,dw,fs){
 	Rwe = J(G,4,0)
 	Re	= J(G,4,0)
 	B 	= J(4,cols(IF_gam),0)
-
+	PSiP = J(4,4,0)
+	
 	for(g=1; g<=G; g++){
 		PP = (P[g,1], P[g,2], 0 , 0 \ 0, 0, P[g,2], P[g,1])
-		IV = PP'*Si
+		PSiP 	= PSiP + PP'*Si*PP
+		IV 		= PP'*Si
 		Rwe[g,] = (IV*w[g]*(e1[g]\e2[g]))'
 		Re[g,] 	= (IV*(e1[g]\e2[g]))'
 		B 		= B + Re[g,]'*dw[g,]/G
 	}
-	A 		= Rwe'*Rwe/G
+	A 		= PSiP/G
+	/* A 		= Rwe'*Rwe/G */
 	Ai 		= pinv(A)
 	Rwe_c 	= Rwe + IF_gam*B'
 	
@@ -139,6 +142,9 @@ real matrix var_2nd(G,YD,w,P,Si,b,IF_gam,dw,fs){
 	}
 	else{
 		V = Ai/G
+	}
+	if (rank(V) < 4){
+		V = V + 0.00001*I(4)
 	}
 	return(V)
 }
@@ -154,54 +160,77 @@ real matrix est(YD,P,r,w,dw,IF_gam,fs){
 }
 end
 
-cap program drop est_iv
-program est_iv, eclass
-syntax varlist (min=0 max=1) [,za(integer 10) zb(integer 10) fs nl]
-qui{
+
+
+
+cap program drop estim_late
+program estim_late, eclass
+qui{	
+	syntax varlist (min = 6) [,cov(varlist) inst(varlist) za(integer 10) zb(integer 10) fs nl]
+	tokenize `varlist'
+	local Nvars `:word count `varlist''
+	
+	* Generate temporal variables
+	forv unit = 1/2{
+		cap drop var_Y`unit'
+		cap drop var_D`unit'
+		cap drop var_Z`unit'
+
+		local idxY = `unit'
+		local idxD = 2+`unit'
+		local idxZ = 4+`unit'
+
+		gen var_Y`unit' = ``idxY''
+		gen var_D`unit' = ``idxD''
+		gen var_Z`unit' = ``idxZ''
+	}	
+	
+	gen var_D_both = var_D1*var_D2
 	local first = "`fs'" != ""
 	local nonlinear = "`nl'" != ""
 	
 	cap gen iota = 1
-	for num 1/2: probit ZX W_* T_* \cap drop PzX \predict PzX \mat gamX = e(b)
+	for num 1/2: probit var_ZX `cov' `inst' \cap drop PzX \predict PzX \mat gamX = e(b)
 	
-	putmata YD 	 = (Y1 Y2 D1 D2 D_both), replace
-	putmata Z 	 = (Z1 Z2), replace
-	putmata X_z  = (W_* T_* iota), replace
+	putmata YD 	 = (var_Y1 var_Y2 var_D1 var_D2 var_D_both), replace
+	putmata Z 	 = (var_Z1 var_Z2), replace
+	putmata X_z  = (`cov' `inst' iota), replace
 	
 	mata{
 		G 	 	 = rows(Z)
-		gam1 	 = st_matrix("gam1")
-		gam2 	 = st_matrix("gam2")	
-		gam  	 = gam1', gam2'
-		ngam 	 = length(gam)
+ 		gam1 	 = st_matrix("gam1")
+ 		gam2 	 = st_matrix("gam2")	
+ 		gam  	 = gam1', gam2'
+ 		ngam 	 = length(gam)
 		
-		Q 		 = q_obs_fun(gam, X_z)
-		w 		 =  w_fun(`za',`zb',Z,Q)
-		dw 	 	 = dw_fun(`za',`zb',Z,Q)
-		IF_gam   = IF_gam_fun(Z,Q)
+ 		Q 		 = q_obs_fun(gam, X_z)
+ 		w 		 =  w_fun(`za',`zb',Z,Q)
+ 		dw 	 	 = dw_fun(`za',`zb',Z,Q)
+ 		IF_gam   = IF_gam_fun(Z,Q)
  
-		YD_tilde = YD:*w
+ 		YD_tilde = YD:*w
 	}
+	
 	getmata (Y_tilde1 Y_tilde2 D_tilde1 D_tilde2 D_tilde_both) = YD_tilde, replace
 	
 	if `nonlinear' == 0{
 	/* Estimate PK (LPM) */
 		for any D_tilde1 D_tilde2 D_tilde_both \ num 1/3 : ///
-			reg X T_* \ cap drop PY \ predict PY
+			reg X `inst' \ cap drop PY \ predict PY
 	}
 	else{
 	/* Estimate PK (probit) */
 		for any D_tilde1 D_tilde2 D_tilde_both \ num 1/3 : ///
-			nl (X = normal({xb:T_*}+{b0})), nolog \cap drop PY \predict PY
+			nl (X = normal({xb:`inst'}+{b0})), nolog \cap drop PY \predict PY
 	}
 	
 	/* Run 1st stage IV */
-	for num 1/2: ivregress 2sls Y_tildeX (D_tilde1 D_tilde2=T_*), r nocon ///
+	for num 1/2: ivregress 2sls Y_tildeX (D_tilde1 D_tilde2=`inst'), r nocon ///
 		\cap drop rX_1st \predict rX_1st, resid
 	
 	putmata r_1st = (r1_1st r2_1st), replace
 	putmata P 	  = (P1 P2), replace
-
+	
 	
 	mata{
 		res = est(YD,P,r_1st,w,dw,IF_gam,`first')
@@ -209,13 +238,82 @@ qui{
 		V = res[,2..5]
 		st_matrix("b", b')
 		st_matrix("V", V)
+		st_matrix("G", G)
 	}
 	local xlist Direct_female Indirect_female Direct_male Indirect_male
 	matrix colnames b = `xlist'
 	matrix colnames V = `xlist'
 	matrix rownames V = `xlist'
 
+	
 	ereturn post b V
 	noi ereturn display
+	noi di "Number of observations used = " G[1,1]
+	
+	drop var_* *tilde* *1st P* iota
+} //qui end	
+end
+
+
+cap program drop estim_iv
+program estim_iv, eclass
+qui{
+	syntax varlist (min = 6) [,cov(varlist) inst(varlist)]
+	tokenize `varlist'
+	local Nvars `:word count `varlist''
+	
+	* Generate temporal variables
+	forv unit = 1/2{
+		cap drop var_Y`unit'
+		cap drop var_D`unit'
+		cap drop var_Z`unit'
+
+		local idxY = `unit'
+		local idxD = 2+`unit'
+		local idxZ = 4+`unit'
+		
+		gen var_Y`unit' = ``idxY''
+		gen var_D`unit' = ``idxD''
+		gen var_Z`unit' = ``idxZ''
+	}
+	
+	ivregress 2sls var_Y1 (i.var_D1##i.var_D2 = i.var_Z1##i.var_Z2) `cov' `inst',r
+	est store iv1
+	local iv1_dir_coef = _b[1.var_D1]
+	local iv1_dir_se = _se[1.var_D1]
+	local iv1_ind_coef = _b[1.var_D2]
+	local iv1_ind_se = _se[1.var_D2]
+	local N1 = e(N)
+
+	ivregress 2sls var_Y2 (i.var_D1##i.var_D2 = i.var_Z1##i.var_Z2)  `cov' `inst',r
+	est store iv2
+	local iv2_dir_coef = _b[1.var_D2]
+	local iv2_dir_se = _se[1.var_D2]
+	local iv2_ind_coef = _b[1.var_D1]
+	local iv2_ind_se = _se[1.var_D1]
+	local N2 = e(N)
+
+	mat b_iv = J(1,4,0)
+	mat V_iv = J(4,4,0)
+	mat b_iv[1,1] = `iv1_dir_coef'
+	mat b_iv[1,2] = `iv2_ind_coef'
+	mat b_iv[1,3] = `iv1_ind_coef'
+	mat b_iv[1,4] = `iv2_dir_coef' 
+	mat V_iv[1,1] = `iv1_dir_se'^2
+	mat V_iv[2,2] = `iv2_ind_se'^2
+	mat V_iv[3,3] = `iv1_ind_se'^2
+	mat V_iv[4,4] = `iv2_dir_se'^2
+	matlist b_iv
+	matlist V_iv
+
+	local xlist Direct_female Indirect_male Indirect_female Direct_male
+	matrix colnames b_iv = `xlist'
+	matrix colnames V_iv = `xlist'
+	matrix rownames V_iv = `xlist'
+
+	ereturn post b_iv V_iv
+	noi ereturn display
+	noi di "Number of observations used = " `N1' "/" `N2'
+	drop var_*
 } //qui end	
 end
